@@ -1,0 +1,57 @@
+name: Auto-Sort LeetCode Problems
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  sort-problems:
+    runs-on: windows-latest
+    # Add these lines to give the token write access to push changes
+    permissions:
+      contents: write
+
+    if: "!contains(github.event.head_commit.message, 'Auto-sort problems')"
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Sort folders by difficulty
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path Easy, Medium, Hard | Out-Null
+
+          Get-ChildItem -Directory | Where-Object {
+              $_.Name -notin @('Easy', 'Medium', 'Hard') -and $_.Name -notlike '.*'
+          } | ForEach-Object {
+              $dir = $_.Name
+              $readme = Join-Path $dir "README.md"
+
+              if (Test-Path $readme) {
+                  $lines = (Get-Content $readme -TotalCount 15) -join "`n"
+
+                  if ($lines -imatch '<h2>.*Easy.*</h2>|<h3>.*Easy.*</h3>|>Easy<') {
+                      Move-Item -Path $dir -Destination "Easy\" -Force
+                  }
+                  elseif ($lines -imatch '<h2>.*Medium.*</h2>|<h3>.*Medium.*</h3>|>Medium<') {
+                      Move-Item -Path $dir -Destination "Medium\" -Force
+                  }
+                  elseif ($lines -imatch '<h2>.*Hard.*</h2>|<h3>.*Hard.*</h3>|>Hard<') {
+                      Move-Item -Path $dir -Destination "Hard\" -Force
+                  }
+              }
+          }
+
+      - name: Commit and Push changes
+        shell: pwsh
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .
+          git diff --staged --quiet
+          if ($LASTEXITCODE -ne 0) {
+              git commit -m "Auto-sort problems by difficulty"
+              git push
+          }
